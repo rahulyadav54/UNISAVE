@@ -3,7 +3,7 @@ import { z } from "zod";
 import { validateMediaUrl, hashUrl } from "@/server/security/url-validator";
 import { checkRateLimit } from "@/server/security/rate-limit";
 import { getAdapterForUrl } from "@/server/platforms/registry";
-import { getCachedAnalyze, createDownloadJob } from "@/server/queue/job-store";
+import { getCachedAnalyze, createDownloadJob, getJob } from "@/server/queue/job-store";
 import { enqueueDownloadJob } from "@/server/queue/download-queue";
 import { processDownloadJob } from "@/server/workers/process-download";
 import { getQueueMode } from "@/server/redis/client";
@@ -91,13 +91,19 @@ export async function POST(request: NextRequest) {
 
   const enqueued = await enqueueDownloadJob(job.id);
   if (!enqueued) {
-    void processDownloadJob(job.id);
+    await processDownloadJob(job.id);
   }
 
+  const updatedJob = (await getJob(job.id)) ?? job;
+
   return NextResponse.json({
-    success: true,
+    success: updatedJob.status !== "failed",
     jobId: job.id,
-    status: job.status,
+    status: updatedJob.status,
+    progress: updatedJob.progress,
+    downloadUrl: updatedJob.downloadUrl,
+    fileName: updatedJob.fileName,
+    error: updatedJob.error,
     queueMode: getQueueMode(),
     processing: enqueued ? "worker" : "inline",
   });

@@ -3,6 +3,7 @@ import type { AnalyzeResult, MediaFormat, MediaInfo } from "@/types/media";
 import type { PlatformId, PlatformMeta } from "@/types/platform";
 import { downloadWithYtDlp, fetchMediaInfo } from "@/server/services/ytdlp";
 import { mapYtDlpFormatsToMediaFormats } from "@/server/services/format-mapper";
+import { tryFallbackAnalysis } from "@/server/services/fallback-extractor";
 
 export function createYtDlpAdapter(meta: PlatformMeta): PlatformAdapter {
   return {
@@ -55,6 +56,16 @@ export function createYtDlpAdapter(meta: PlatformMeta): PlatformAdapter {
           formats,
         };
       } catch (err) {
+        // Attempt fallback online analysis before giving up
+        try {
+          const fallbackResult = await tryFallbackAnalysis(url, meta.id as PlatformId);
+          if (fallbackResult && fallbackResult.success && fallbackResult.formats.length > 0) {
+            return fallbackResult;
+          }
+        } catch {
+          // fallback failed, continue to standard error mapping
+        }
+
         const message = err instanceof Error ? err.message : "Analysis failed.";
         let errorCode = "ANALYZE_FAILED";
         if (message.includes("publicly accessible")) errorCode = "PRIVATE_CONTENT";

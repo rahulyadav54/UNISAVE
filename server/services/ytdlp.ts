@@ -53,11 +53,25 @@ export async function ensureYtDlpBinary(): Promise<string> {
   downloadPromise = (async () => {
     const isWin = process.platform === "win32";
     const isMac = process.platform === "darwin";
-    const binName = isWin ? "yt-dlp.exe" : "yt-dlp";
+    const isArm64 = process.arch === "arm64";
+
+    const binName = isWin
+      ? "yt-dlp.exe"
+      : isMac
+      ? "yt-dlp_macos"
+      : isArm64
+      ? "yt-dlp_linux_aarch64"
+      : "yt-dlp_linux";
+
     const binDir = path.join(os.tmpdir(), "unisave-bin");
     const targetPath = path.join(binDir, binName);
 
     if (existsSync(targetPath)) {
+      try {
+        if (!isWin) chmodSync(targetPath, 0o755);
+      } catch {
+        // ignore
+      }
       cachedBinaryPath = targetPath;
       return targetPath;
     }
@@ -68,8 +82,11 @@ export async function ensureYtDlpBinary(): Promise<string> {
         ? "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe"
         : isMac
         ? "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_macos"
-        : "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp";
+        : isArm64
+        ? "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux_aarch64"
+        : "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux";
 
+      console.log(`[UNISAVE] Downloading yt-dlp standalone binary from ${downloadUrl}...`);
       const res = await fetch(downloadUrl, {
         headers: { "User-Agent": "Mozilla/5.0 UNISAVE-Downloader" },
       });
@@ -84,9 +101,11 @@ export async function ensureYtDlpBinary(): Promise<string> {
         chmodSync(targetPath, 0o755);
       }
 
+      console.log(`[UNISAVE] yt-dlp binary ready at ${targetPath}`);
       cachedBinaryPath = targetPath;
       return targetPath;
-    } catch {
+    } catch (err) {
+      console.error("[UNISAVE] Failed to ensure yt-dlp binary:", err);
       return "yt-dlp";
     }
   })();
@@ -195,18 +214,73 @@ async function runYtDlp(args: string[], timeoutMs = DEFAULT_TIMEOUT_MS): Promise
 }
 
 
+const USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
+
+function getExtractorArgs(url: string): string[] {
+  const lowerUrl = url.toLowerCase();
+  const args: string[] = [];
+
+  if (lowerUrl.includes("youtube.com") || lowerUrl.includes("youtu.be")) {
+    args.push("youtube:player_client=ios,web");
+    args.push("youtube:player_skip=web");
+  } else if (lowerUrl.includes("instagram.com")) {
+    args.push("instagram:player_client=web");
+  } else if (lowerUrl.includes("tiktok.com")) {
+    args.push("tiktok:player_client=web");
+  } else if (lowerUrl.includes("twitter.com") || lowerUrl.includes("x.com")) {
+    args.push("twitter:player_client=web");
+  } else if (lowerUrl.includes("facebook.com")) {
+    args.push("facebook:player_client=web");
+  } else if (lowerUrl.includes("reddit.com")) {
+    args.push("reddit:player_client=web");
+  } else if (lowerUrl.includes("pinterest.com")) {
+    args.push("pinterest:player_client=web");
+  } else if (lowerUrl.includes("vimeo.com")) {
+    args.push("vimeo:player_client=web");
+  } else if (lowerUrl.includes("threads.com")) {
+    args.push("threads:player_client=web");
+  }
+
+  return args;
+}
+
 export async function fetchMediaInfo(url: string): Promise<YtDlpInfo> {
-  const output = await runYtDlp([
+  const args: string[] = [
     ...ytDlpGlobalArgs(),
     "--dump-single-json",
     "--no-playlist",
     "--no-warnings",
-    "--extractor-args",
-    "youtube:player_client=ios,web",
     "--add-header",
-    "User-Agent:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-    url,
-  ]);
+    `User-Agent:${USER_AGENT}`,
+  ];
+
+  const extractorArgs = getExtractorArgs(url);
+  if (extractorArgs.length > 0) {
+    args.push("--extractor-args", extractorArgs.join(";"));
+  }
+
+  args.push(url);
+
+  let output: string;
+  try {
+    output = await runYtDlp(args);
+  } catch (firstErr) {
+    const fallbackArgs = [
+      ...ytDlpGlobalArgs(),
+      "--dump-single-json",
+      "--no-playlist",
+      "--no-warnings",
+      "--add-header",
+      `User-Agent:${USER_AGENT}`,
+      url,
+    ];
+    try {
+      output = await runYtDlp(fallbackArgs);
+    } catch {
+      throw firstErr;
+    }
+  }
+
   const parsed = JSON.parse(output) as YtDlpInfo;
   return parsed;
 }

@@ -126,6 +126,22 @@ export function MediaDownloader({ initialUrl = "" }: { initialUrl?: string }) {
           setDownloadError(data.error || "Download could not be started.");
           return;
         }
+
+        if (data.status === "completed" && data.downloadUrl) {
+          setDownloadProgress(100);
+          setDownloadStatus("ready");
+          setDownloadUrl(data.downloadUrl);
+          if (data.fileName) setDownloadFileName(data.fileName);
+          const format = result.formats.find((f) => f.id === formatId);
+          addItem({
+            title: result.media.title || "Download",
+            platform: result.platform,
+            format: format?.format || "file",
+            thumbnail: result.media.thumbnail,
+          });
+          return;
+        }
+
         await pollJob(data.jobId);
       } catch {
         setDownloadStatus("error");
