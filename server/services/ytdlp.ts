@@ -130,11 +130,14 @@ function mapYtDlpError(message: string): string {
   // Log raw error to server for debugging
   console.error("[yt-dlp raw error]", message);
 
+  if (/confirm.*not a bot|bot|captcha|verify/i.test(message)) {
+    return "YouTube requested bot verification on this server. Retrying with alternate client...";
+  }
   if (/members.only|join this channel|exclusive perks|member.?only/i.test(message)) {
     return "This is a members-only video. You must be a paying channel member to access it.";
   }
-  if (/private|login|sign in|authentication/i.test(message)) {
-    return "This content isn't publicly accessible.";
+  if (/private video|login to view|sign in to view/i.test(message)) {
+    return "This content is private or requires login.";
   }
   if (/unsupported url|no suitable/i.test(message)) {
     return "UNISAVE doesn't support this URL yet.";
@@ -145,9 +148,6 @@ function mapYtDlpError(message: string): string {
   if (/requested format|format is not available/i.test(message)) {
     return "That quality is not available for this video. Try another format.";
   }
-  if (/confirm.*not a bot|bot|captcha|verify/i.test(message)) {
-    return "YouTube is blocking automated access. Please try again in a moment.";
-  }
   if (/age.?gat|age.?restrict|18\+/i.test(message)) {
     return "This content is age-restricted and cannot be accessed.";
   }
@@ -157,7 +157,7 @@ function mapYtDlpError(message: string): string {
   if (/network|connection|timeout|ssl/i.test(message)) {
     return "Network error. Please check your connection and try again.";
   }
-  return "We couldn't access this media right now. Please try a different URL.";
+  return "Could not download this media. Please try another format or quality.";
 }
 
 async function runYtDlp(args: string[], timeoutMs = DEFAULT_TIMEOUT_MS): Promise<string> {
@@ -221,8 +221,7 @@ function getExtractorArgs(url: string): string[] {
   const args: string[] = [];
 
   if (lowerUrl.includes("youtube.com") || lowerUrl.includes("youtu.be")) {
-    args.push("youtube:player_client=ios,web");
-    args.push("youtube:player_skip=web");
+    args.push("youtube:player_client=ios,android,mweb");
   } else if (lowerUrl.includes("instagram.com")) {
     args.push("instagram:player_client=web");
   } else if (lowerUrl.includes("tiktok.com")) {
@@ -291,26 +290,60 @@ export async function downloadWithYtDlp(
   outputPath: string,
   options?: { audioOnly?: boolean },
 ): Promise<void> {
-  const args = [
+  const isAudio = Boolean(options?.audioOnly);
+
+  const baseArgs = [
     ...ytDlpGlobalArgs(),
-    "-f",
-    formatSelector,
     "--no-playlist",
     "--no-warnings",
     "--no-part",
+    "--add-header",
+    `User-Agent:${USER_AGENT}`,
+  ];
+
+  const extractorArgs = getExtractorArgs(url);
+  if (extractorArgs.length > 0) {
+    baseArgs.push("--extractor-args", extractorArgs.join(";"));
+  }
+
+  const primaryArgs = [
+    ...baseArgs,
+    "-f",
+    formatSelector,
     "-o",
     outputPath,
   ];
 
-  if (options?.audioOnly) {
-    args.push("--extract-audio", "--audio-format", "m4a");
+  if (isAudio) {
+    primaryArgs.push("--extract-audio", "--audio-format", "m4a");
   } else {
-    args.push("--merge-output-format", "mp4", "--remux-video", "mp4");
+    primaryArgs.push("--merge-output-format", "mp4", "--remux-video", "mp4");
   }
 
-  args.push(url);
+  primaryArgs.push(url);
 
-  await runYtDlp(args, DOWNLOAD_TIMEOUT_MS);
+  try {
+    await runYtDlp(primaryArgs, DOWNLOAD_TIMEOUT_MS);
+  } catch (err) {
+    console.warn("[downloadWithYtDlp] Primary selector failed, trying fallback format...", err);
+
+    // Fallback attempt: use standard best/m4a without complex format merging
+    const fallbackSelector = isAudio ? "bestaudio/best" : "best[ext=mp4]/bestvideo+bestaudio/best";
+    const fallbackArgs = [
+      ...baseArgs,
+      "-f",
+      fallbackSelector,
+      "-o",
+      outputPath,
+    ];
+
+    if (isAudio) {
+      fallbackArgs.push("--extract-audio", "--audio-format", "m4a");
+    }
+
+    fallbackArgs.push(url);
+    await runYtDlp(fallbackArgs, DOWNLOAD_TIMEOUT_MS);
+  }
 }
 
 export function stableFormatId(format: YtDlpFormat): string {

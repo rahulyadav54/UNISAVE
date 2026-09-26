@@ -56,9 +56,18 @@ export async function processDownloadJob(jobId: string): Promise<void> {
     const tempName = `${jobId}.%(ext)s`;
     const outputTemplate = path.join(root, tempName);
 
-    await downloadWithYtDlp(pending.url, formatSelector, outputTemplate, {
-      audioOnly,
-    });
+    try {
+      await downloadWithYtDlp(pending.url, formatSelector, outputTemplate, {
+        audioOnly,
+      });
+    } catch (downloadErr) {
+      console.warn("[processDownloadJob] Primary download selector failed, trying progressive stream...", downloadErr);
+      const progressiveSelector = audioOnly ? "bestaudio/best" : "best[ext=mp4]/best/worst";
+      await downloadWithYtDlp(pending.url, progressiveSelector, outputTemplate, {
+        audioOnly,
+      });
+    }
+
     await updateJob(jobId, { progress: 85 });
 
     const { readdir } = await import("node:fs/promises");
