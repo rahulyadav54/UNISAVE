@@ -1,36 +1,81 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# UNISAVE
 
-## Getting Started
+**One Link. One Place. Save What Matters.**
 
-First, run the development server:
+UNISAVE is a premium universal media toolkit for analyzing and downloading **publicly accessible** media from supported platforms.
+
+No database is required. Optional **Redis + worker** scale download processing in production.
+
+## Features
+
+- Premium dark SaaS UI with full analyze → download flow
+- Modular platform adapters backed by **yt-dlp** (real formats only)
+- **Phase 2 queue**: Redis job state + BullMQ worker (memory/inline fallback for local dev)
+- Temporary file storage with signed one-time download URLs
+- Thumbnail Fetcher tool, admin metrics, health check
+- SSRF protection, rate limiting (Redis-backed when configured)
+
+## Requirements
+
+- Node.js 20+
+- [yt-dlp](https://github.com/yt-dlp/yt-dlp) on `PATH` or `YT_DLP_PATH`
+- [ffmpeg](https://ffmpeg.org/) on `PATH` (required to merge video+audio for many platforms, e.g. YouTube)
+- **Optional:** Redis + `npm run worker` for background downloads (recommended in production)
+
+## Quick start (local, no Redis)
 
 ```bash
+cp .env.example .env.local
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Downloads run **inline** in the web process when `REDIS_URL` is unset.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Production queue (no database)
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+# Terminal 1
+REDIS_URL=redis://localhost:6379 npm run dev
 
-## Learn More
+# Terminal 2
+REDIS_URL=redis://localhost:6379 npm run worker
+```
 
-To learn more about Next.js, take a look at the following resources:
+Or:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```bash
+docker compose up --build
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+This starts **web**, **worker**, and **Redis** only.
 
-## Deploy on Vercel
+## Environment variables
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+| Variable | Purpose |
+|----------|---------|
+| `YT_DLP_PATH` | yt-dlp binary |
+| `REDIS_URL` | Enables Redis job store + BullMQ queue |
+| `WORKER_CONCURRENCY` | Parallel download jobs (default `2`) |
+| `STORAGE_PATH` | Temp downloads (default `.storage`) |
+| `ADMIN_API_KEY` | Protects `/api/admin/stats` |
+| `NEXT_PUBLIC_APP_URL` | Canonical URL for SEO |
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## API
+
+- `GET /api/health` — service + queue mode
+- `POST /api/media/analyze`
+- `POST /api/media/download` — enqueues when Redis is configured
+- `GET /api/media/status/:jobId`
+- `GET /api/media/serve/:token`
+
+## Testing
+
+```bash
+npm test
+npm run build
+```
+
+## Responsible use
+
+UNISAVE does not bypass DRM, authentication, private content, paywalls, or technical restrictions.

@@ -1,0 +1,38 @@
+services:
+  web:
+    build:
+      context: .
+      target: web
+    ports:
+      - "3000:3000"
+    environment:
+      NEXT_PUBLIC_APP_URL: http://localhost:3000
+      REDIS_URL: redis://redis:6379
+      YT_DLP_PATH: yt-dlp
+      STORAGE_PATH: /app/.storage
+    depends_on:
+      - redis
+    volumes:
+      - storage_data:/app/.storage
+
+  worker:
+    build:
+      context: .
+      target: worker
+    environment:
+      REDIS_URL: redis://redis:6379
+      YT_DLP_PATH: yt-dlp
+      STORAGE_PATH: /app/.storage
+      WORKER_CONCURRENCY: 2
+    depends_on:
+      - redis
+    volumes:
+      - storage_data:/app/.storage
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+volumes:
+  storage_data:
