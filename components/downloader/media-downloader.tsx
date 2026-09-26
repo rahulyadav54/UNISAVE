@@ -81,18 +81,21 @@ export function MediaDownloader({ initialUrl = "" }: { initialUrl?: string }) {
       setDownloadProgress(data.progress ?? 0);
 
       if (data.status === "completed" && data.downloadUrl) {
-        setDownloadStatus("ready");
-        setDownloadUrl(data.downloadUrl);
-        if (data.fileName) setDownloadFileName(data.fileName);
-        if (result) {
-          const format = result.formats.find((f) => f.id === data.formatId);
-          addItem({
-            title: result.media.title || "Download",
-            platform: result.platform,
-            format: format?.format || "file",
-            thumbnail: result.media.thumbnail,
-          });
-        }
+        setDownloadProgress(100);
+        setTimeout(() => {
+          setDownloadStatus("ready");
+          setDownloadUrl(data.downloadUrl);
+          if (data.fileName) setDownloadFileName(data.fileName);
+          if (result) {
+            const format = result.formats.find((f) => f.id === data.formatId);
+            addItem({
+              title: result.media.title || "Download",
+              platform: result.platform,
+              format: format?.format || "file",
+              thumbnail: result.media.thumbnail,
+            });
+          }
+        }, 800);
         return;
       }
       if (data.status === "failed" || data.status === "expired") {
@@ -129,16 +132,19 @@ export function MediaDownloader({ initialUrl = "" }: { initialUrl?: string }) {
 
         if (data.status === "completed" && data.downloadUrl) {
           setDownloadProgress(100);
-          setDownloadStatus("ready");
-          setDownloadUrl(data.downloadUrl);
-          if (data.fileName) setDownloadFileName(data.fileName);
-          const format = result.formats.find((f) => f.id === formatId);
-          addItem({
-            title: result.media.title || "Download",
-            platform: result.platform,
-            format: format?.format || "file",
-            thumbnail: result.media.thumbnail,
-          });
+          // Allow the progress bar to animate to 100% smoothly before showing the button
+          setTimeout(() => {
+            setDownloadStatus("ready");
+            setDownloadUrl(data.downloadUrl);
+            if (data.fileName) setDownloadFileName(data.fileName);
+            const format = result.formats.find((f) => f.id === formatId);
+            addItem({
+              title: result.media.title || "Download",
+              platform: result.platform,
+              format: format?.format || "file",
+              thumbnail: result.media.thumbnail,
+            });
+          }, 800);
           return;
         }
 

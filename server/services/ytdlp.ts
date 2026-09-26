@@ -118,7 +118,7 @@ export function getYtDlpBinary(): string {
 }
 
 function ytDlpGlobalArgs(): string[] {
-  const args: string[] = [];
+  const args: string[] = ["--js-runtimes", "node"];
   const ffmpeg = process.env.FFMPEG_PATH?.trim();
   if (ffmpeg) {
     args.push("--ffmpeg-location", ffmpeg);
@@ -221,8 +221,7 @@ function getExtractorArgs(url: string): string[] {
   const args: string[] = [];
 
   if (lowerUrl.includes("youtube.com") || lowerUrl.includes("youtu.be")) {
-    args.push("youtube:player_client=android,ios");
-    args.push("youtube:player_skip=web,web_creator,tv");
+    args.push("youtube:player_client=tv");
   } else if (lowerUrl.includes("instagram.com")) {
     args.push("instagram:player_client=web");
   } else if (lowerUrl.includes("tiktok.com")) {

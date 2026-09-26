@@ -1,8 +1,6 @@
-import { createWriteStream } from "node:fs";
-import { pipeline } from "node:stream/promises";
 import ytdl from "@distube/ytdl-core";
 import type { PlatformAdapter } from "./types";
-import type { AnalyzeResult, MediaFormat, MediaInfo } from "@/types/media";
+import type { AnalyzeResult, MediaFormat } from "@/types/media";
 import { stableFormatIdFromKey } from "@/server/services/format-mapper";
 import { tryFallbackAnalysis } from "@/server/services/fallback-extractor";
 import { downloadWithYtDlp } from "@/server/services/ytdlp";
@@ -122,28 +120,15 @@ export async function downloadYouTubeStream(
   outputPath: string,
   options?: { audioOnly?: boolean },
 ): Promise<void> {
-  const itagNum = parseInt(itagOrSelector, 10);
-
-  // Try pure JS stream download first
-  if (!Number.isNaN(itagNum)) {
-    try {
-      console.log(`[downloadYouTubeStream] Streaming YouTube itag ${itagNum} to ${outputPath}...`);
-      const stream = ytdl(url, {
-        quality: itagNum,
-        filter: options?.audioOnly ? "audioonly" : undefined,
-        highWaterMark: 1 << 25,
-      });
-
-      const writeStream = createWriteStream(outputPath);
-      await pipeline(stream, writeStream);
-      console.log(`[downloadYouTubeStream] Stream download completed for ${outputPath}`);
-      return;
-    } catch (streamErr) {
-      console.warn("[downloadYouTubeStream] Native ytdl stream failed, attempting yt-dlp fallback...", streamErr);
-    }
+  const isAudio = options?.audioOnly;
+  
+  // ytdl-core is currently hanging on Vercel due to YouTube changes.
+  // We rely entirely on yt-dlp which now uses the tv client to bypass bot checks.
+  let format = itagOrSelector;
+  
+  if (!Number.isNaN(parseInt(format, 10))) {
+    format = isAudio ? "140/bestaudio/best" : "22/18/best[ext=mp4]/best";
   }
 
-  // Fallback to yt-dlp binary with android/ios client
-  const format = options?.audioOnly ? "140/bestaudio/best" : "22/18/best[ext=mp4]/best";
   await downloadWithYtDlp(url, format, outputPath, options);
 }
