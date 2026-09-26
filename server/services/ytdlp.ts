@@ -1,5 +1,9 @@
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
+import { existsSync, chmodSync } from "node:fs";
+import { mkdir, writeFile } from "node:fs/promises";
+import path from "node:path";
+import os from "node:os";
 
 export interface YtDlpFormat {
   format_id: string;
@@ -32,8 +36,66 @@ export interface YtDlpInfo {
 const DEFAULT_TIMEOUT_MS = 45_000;
 const DOWNLOAD_TIMEOUT_MS = 10 * 60_000;
 
+let cachedBinaryPath: string | null = null;
+let downloadPromise: Promise<string> | null = null;
+
+export async function ensureYtDlpBinary(): Promise<string> {
+  if (process.env.YT_DLP_PATH) {
+    return process.env.YT_DLP_PATH;
+  }
+  if (cachedBinaryPath && existsSync(cachedBinaryPath)) {
+    return cachedBinaryPath;
+  }
+  if (downloadPromise) {
+    return downloadPromise;
+  }
+
+  downloadPromise = (async () => {
+    const isWin = process.platform === "win32";
+    const isMac = process.platform === "darwin";
+    const binName = isWin ? "yt-dlp.exe" : "yt-dlp";
+    const binDir = path.join(os.tmpdir(), "unisave-bin");
+    const targetPath = path.join(binDir, binName);
+
+    if (existsSync(targetPath)) {
+      cachedBinaryPath = targetPath;
+      return targetPath;
+    }
+
+    try {
+      await mkdir(binDir, { recursive: true });
+      const downloadUrl = isWin
+        ? "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe"
+        : isMac
+        ? "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_macos"
+        : "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp";
+
+      const res = await fetch(downloadUrl, {
+        headers: { "User-Agent": "Mozilla/5.0 UNISAVE-Downloader" },
+      });
+
+      if (!res.ok) {
+        throw new Error(`Failed to download yt-dlp binary: ${res.statusText}`);
+      }
+
+      const arrayBuffer = await res.arrayBuffer();
+      await writeFile(targetPath, Buffer.from(arrayBuffer));
+      if (!isWin) {
+        chmodSync(targetPath, 0o755);
+      }
+
+      cachedBinaryPath = targetPath;
+      return targetPath;
+    } catch {
+      return "yt-dlp";
+    }
+  })();
+
+  return downloadPromise;
+}
+
 export function getYtDlpBinary(): string {
-  return process.env.YT_DLP_PATH || "yt-dlp";
+  return process.env.YT_DLP_PATH || cachedBinaryPath || "yt-dlp";
 }
 
 function ytDlpGlobalArgs(): string[] {
@@ -61,9 +123,15 @@ function mapYtDlpError(message: string): string {
   return "We couldn't access this media right now.";
 }
 
-function runYtDlp(args: string[], timeoutMs = DEFAULT_TIMEOUT_MS): Promise<string> {
+async function runYtDlp(args: string[], timeoutMs = DEFAULT_TIMEOUT_MS): Promise<string> {
+  let bin = process.env.YT_DLP_PATH || "yt-dlp";
+  try {
+    bin = await ensureYtDlpBinary();
+  } catch {
+    // fallback
+  }
+
   return new Promise((resolve, reject) => {
-    const bin = getYtDlpBinary();
     const child = spawn(bin, args, {
       windowsHide: true,
       stdio: ["ignore", "pipe", "pipe"],
@@ -88,7 +156,7 @@ function runYtDlp(args: string[], timeoutMs = DEFAULT_TIMEOUT_MS): Promise<strin
       if ((err as NodeJS.ErrnoException).code === "ENOENT") {
         reject(
           new Error(
-            "Media processor is not configured. Install yt-dlp and set YT_DLP_PATH in your environment.",
+            "Media processor is not configured. Please install yt-dlp or allow automatic binary download.",
           ),
         );
       } else {
@@ -107,6 +175,7 @@ function runYtDlp(args: string[], timeoutMs = DEFAULT_TIMEOUT_MS): Promise<strin
     });
   });
 }
+
 
 export async function fetchMediaInfo(url: string): Promise<YtDlpInfo> {
   const output = await runYtDlp([

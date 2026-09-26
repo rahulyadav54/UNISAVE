@@ -78,13 +78,12 @@ export function UrlInput({ value, onChange, onAnalyze, loading }: UrlInputProps)
               initial={reduce ? false : { scale: 0.7, opacity: 0, x: -5 }}
               animate={{ scale: 1, opacity: 1, x: 0 }}
               transition={{ type: "spring", stiffness: 500, damping: 25 }}
-              className="flex items-center gap-1.5 rounded-full border border-violet-500/25 bg-violet-500/10 px-2.5 py-1 text-xs font-semibold text-foreground backdrop-blur-md"
             >
-              <PlatformIcon platform={platform as PlatformId} className="pointer-events-auto" />
-              <span className="capitalize">{platform}</span>
+              <PlatformIcon platform={platform as PlatformId} className="pointer-events-auto border-violet-500/30 bg-violet-500/10 text-foreground font-semibold" />
             </motion.div>
           )}
         </div>
+
         <Input
           ref={inputRef}
           value={value}
