@@ -56,16 +56,23 @@ export async function processDownloadJob(jobId: string): Promise<void> {
     const tempName = `${jobId}.%(ext)s`;
     const outputTemplate = path.join(root, tempName);
 
-    try {
-      await downloadWithYtDlp(pending.url, formatSelector, outputTemplate, {
-        audioOnly,
-      });
-    } catch (downloadErr) {
-      console.warn("[processDownloadJob] Primary download selector failed, trying progressive stream...", downloadErr);
-      const progressiveSelector = audioOnly ? "bestaudio/best" : "best[ext=mp4]/best/worst";
-      await downloadWithYtDlp(pending.url, progressiveSelector, outputTemplate, {
-        audioOnly,
-      });
+    if (pending.platform === "youtube") {
+      const { downloadYouTubeStream } = await import("@/server/platforms/youtube-adapter");
+      const targetExtension = audioOnly ? "m4a" : "mp4";
+      const targetFilePath = path.join(root, `${jobId}.${targetExtension}`);
+      await downloadYouTubeStream(pending.url, formatSelector, targetFilePath, { audioOnly });
+    } else {
+      try {
+        await downloadWithYtDlp(pending.url, formatSelector, outputTemplate, {
+          audioOnly,
+        });
+      } catch (downloadErr) {
+        console.warn("[processDownloadJob] Primary download selector failed, trying progressive stream...", downloadErr);
+        const progressiveSelector = audioOnly ? "bestaudio/best" : "best[ext=mp4]/best/worst";
+        await downloadWithYtDlp(pending.url, progressiveSelector, outputTemplate, {
+          audioOnly,
+        });
+      }
     }
 
     await updateJob(jobId, { progress: 85 });
