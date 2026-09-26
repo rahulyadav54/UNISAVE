@@ -108,7 +108,13 @@ function ytDlpGlobalArgs(): string[] {
 }
 
 function mapYtDlpError(message: string): string {
-  if (/private|login|sign in|authentication|members only/i.test(message)) {
+  // Log raw error to server for debugging
+  console.error("[yt-dlp raw error]", message);
+
+  if (/members.only|join this channel|exclusive perks|member.?only/i.test(message)) {
+    return "This is a members-only video. You must be a paying channel member to access it.";
+  }
+  if (/private|login|sign in|authentication/i.test(message)) {
     return "This content isn't publicly accessible.";
   }
   if (/unsupported url|no suitable/i.test(message)) {
@@ -120,7 +126,19 @@ function mapYtDlpError(message: string): string {
   if (/requested format|format is not available/i.test(message)) {
     return "That quality is not available for this video. Try another format.";
   }
-  return "We couldn't access this media right now.";
+  if (/confirm.*not a bot|bot|captcha|verify/i.test(message)) {
+    return "YouTube is blocking automated access. Please try again in a moment.";
+  }
+  if (/age.?gat|age.?restrict|18\+/i.test(message)) {
+    return "This content is age-restricted and cannot be accessed.";
+  }
+  if (/unavailable|removed|deleted|no longer available/i.test(message)) {
+    return "This video is unavailable or has been removed.";
+  }
+  if (/network|connection|timeout|ssl/i.test(message)) {
+    return "Network error. Please check your connection and try again.";
+  }
+  return "We couldn't access this media right now. Please try a different URL.";
 }
 
 async function runYtDlp(args: string[], timeoutMs = DEFAULT_TIMEOUT_MS): Promise<string> {
@@ -183,6 +201,10 @@ export async function fetchMediaInfo(url: string): Promise<YtDlpInfo> {
     "--dump-single-json",
     "--no-playlist",
     "--no-warnings",
+    "--extractor-args",
+    "youtube:player_client=ios,web",
+    "--add-header",
+    "User-Agent:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
     url,
   ]);
   const parsed = JSON.parse(output) as YtDlpInfo;
