@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { PlatformIcon } from "@/components/platform/platform-icon";
 import { formatDuration, formatFileSize } from "@/lib/utils";
 import type { PlatformId } from "@/types/platform";
-import { Progress } from "@/components/ui/progress";
+import { DownloadProgressBar } from "./download-progress-bar";
 
 interface MediaResultCardProps {
   result: AnalyzeResult;
@@ -192,11 +192,7 @@ export function MediaResultCard({
 
         <div className="mt-8 space-y-4">
           {downloadStatus === "processing" && (
-            <div className="rounded-xl border border-violet-500/20 bg-violet-500/10 p-4">
-              <p className="text-sm font-semibold text-foreground">Preparing your media download...</p>
-              <Progress value={downloadProgress} className="mt-3" />
-              <p className="mt-1.5 text-xs font-medium text-muted-foreground">{downloadProgress}% completed</p>
-            </div>
+            <DownloadProgressBar progress={downloadProgress} />
           )}
 
           {downloadStatus === "ready" && downloadUrl && (

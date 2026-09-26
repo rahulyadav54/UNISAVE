@@ -75,7 +75,7 @@ async function extractYouTube(url: string): Promise<AnalyzeResult | null> {
       label: "HD 1080p / 720p Video",
       resolution: "1080p",
       available: true,
-      ytdlpFormatId: "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best",
+      ytdlpFormatId: "22/18/best[ext=mp4]/best",
     },
     {
       id: stableFormatIdFromKey(`yt-720-${videoId || url}`),
@@ -85,7 +85,7 @@ async function extractYouTube(url: string): Promise<AnalyzeResult | null> {
       label: "720p High Quality",
       resolution: "720p",
       available: true,
-      ytdlpFormatId: "136+140/22/best[height<=720]",
+      ytdlpFormatId: "22/best[height<=720]/18/best",
     },
     {
       id: stableFormatIdFromKey(`yt-360-${videoId || url}`),
@@ -95,7 +95,7 @@ async function extractYouTube(url: string): Promise<AnalyzeResult | null> {
       label: "360p Fast Download",
       resolution: "360p",
       available: true,
-      ytdlpFormatId: "18/best[height<=360]",
+      ytdlpFormatId: "18/best[height<=360]/best",
     },
     {
       id: stableFormatIdFromKey(`yt-audio-${videoId || url}`),
@@ -104,7 +104,7 @@ async function extractYouTube(url: string): Promise<AnalyzeResult | null> {
       quality: "Audio",
       label: "High Quality MP3 / M4A Audio",
       available: true,
-      ytdlpFormatId: "bestaudio/best",
+      ytdlpFormatId: "140/bestaudio/best",
     },
   ];
 

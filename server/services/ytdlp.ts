@@ -221,7 +221,8 @@ function getExtractorArgs(url: string): string[] {
   const args: string[] = [];
 
   if (lowerUrl.includes("youtube.com") || lowerUrl.includes("youtu.be")) {
-    args.push("youtube:player_client=ios,android,mweb");
+    args.push("youtube:player_client=android,ios");
+    args.push("youtube:player_skip=web,web_creator,tv");
   } else if (lowerUrl.includes("instagram.com")) {
     args.push("instagram:player_client=web");
   } else if (lowerUrl.includes("tiktok.com")) {
