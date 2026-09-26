@@ -20,97 +20,85 @@ export const youtubeAdapter: PlatformAdapter = {
     return { valid: true };
   },
   async analyze(url: string): Promise<AnalyzeResult> {
+    // 1. Instant extraction via oEmbed (fastest, takes < 200ms)
     try {
-      const info = await ytdl.getInfo(url);
-      const details = info.videoDetails;
-
-      const formats: MediaFormat[] = [];
-      const seen = new Set<string>();
-
-      // Progressive formats (both video and audio included)
-      const progressive = info.formats.filter((f) => f.hasVideo && f.hasAudio);
-      for (const f of progressive) {
-        const quality = f.qualityLabel || `${f.height}p` || "Standard";
-        if (seen.has(quality)) continue;
-        seen.add(quality);
-
-        formats.push({
-          id: stableFormatIdFromKey(`yt-prog-${f.itag}`),
-          type: "video",
-          format: f.container || "mp4",
-          quality,
-          resolution: f.qualityLabel || (f.height ? `${f.height}p` : undefined),
-          fps: f.fps,
-          fileSize: f.contentLength ? parseInt(f.contentLength, 10) : undefined,
-          label: `${quality} (Direct Stream)`,
-          available: true,
-          ytdlpFormatId: String(f.itag),
-        });
+      const fastResult = await tryFallbackAnalysis(url, "youtube");
+      if (fastResult && fastResult.success && fastResult.formats.length > 0) {
+        return fastResult;
       }
+    } catch {
+      // ignore
+    }
 
-      // If no progressive formats found, check adaptive video formats
-      if (formats.length === 0) {
-        const videoFormats = info.formats.filter((f) => f.hasVideo);
-        for (const f of videoFormats) {
-          const quality = f.qualityLabel || `${f.height}p` || "HD";
+    // 2. Secondary fallback via ytdl with a strict 3-second timeout
+    try {
+      const infoPromise = ytdl.getInfo(url);
+      const timeoutPromise = new Promise<null>((_, reject) =>
+        setTimeout(() => reject(new Error("Timeout")), 3000),
+      );
+
+      const info = (await Promise.race([infoPromise, timeoutPromise])) as ytdl.videoInfo;
+      if (info?.videoDetails) {
+        const details = info.videoDetails;
+        const formats: MediaFormat[] = [];
+        const seen = new Set<string>();
+
+        const progressive = info.formats.filter((f) => f.hasVideo && f.hasAudio);
+        for (const f of progressive) {
+          const quality = f.qualityLabel || `${f.height}p` || "Standard";
           if (seen.has(quality)) continue;
           seen.add(quality);
 
           formats.push({
-            id: stableFormatIdFromKey(`yt-vid-${f.itag}`),
+            id: stableFormatIdFromKey(`yt-prog-${f.itag}`),
             type: "video",
             format: f.container || "mp4",
             quality,
             resolution: f.qualityLabel || (f.height ? `${f.height}p` : undefined),
-            label: `${quality} Video`,
+            fps: f.fps,
+            fileSize: f.contentLength ? parseInt(f.contentLength, 10) : undefined,
+            label: `${quality} (Direct Stream)`,
             available: true,
             ytdlpFormatId: String(f.itag),
           });
         }
-      }
 
-      // Best Audio Format
-      const audioFormats = info.formats.filter((f) => f.hasAudio && !f.hasVideo);
-      if (audioFormats.length > 0) {
-        const bestAudio = audioFormats[0];
-        formats.push({
-          id: stableFormatIdFromKey(`yt-audio-${bestAudio.itag}`),
-          type: "audio",
-          format: "m4a",
-          quality: "Audio",
-          label: `${bestAudio.audioBitrate || 128} kbps High Quality Audio`,
-          available: true,
-          ytdlpFormatId: String(bestAudio.itag),
-        });
-      }
+        const audioFormats = info.formats.filter((f) => f.hasAudio && !f.hasVideo);
+        if (audioFormats.length > 0) {
+          const bestAudio = audioFormats[0];
+          formats.push({
+            id: stableFormatIdFromKey(`yt-audio-${bestAudio.itag}`),
+            type: "audio",
+            format: "m4a",
+            quality: "Audio",
+            label: `${bestAudio.audioBitrate || 128} kbps High Quality Audio`,
+            available: true,
+            ytdlpFormatId: String(bestAudio.itag),
+          });
+        }
 
-      const media: MediaInfo = {
-        title: details.title,
-        thumbnail: details.thumbnails?.[details.thumbnails.length - 1]?.url || details.thumbnails?.[0]?.url,
-        platform: "youtube",
-        creator: details.author?.name,
-        duration: parseInt(details.lengthSeconds || "0", 10),
-        description: details.description || undefined,
-        isPublic: true,
-        watermarkNote: "Direct audio & video streams available.",
-      };
-
-      if (formats.length > 0) {
-        return {
-          success: true,
-          platform: "youtube",
-          media,
-          formats,
-        };
+        if (formats.length > 0) {
+          return {
+            success: true,
+            platform: "youtube",
+            media: {
+              title: details.title,
+              thumbnail:
+                details.thumbnails?.[details.thumbnails.length - 1]?.url ||
+                details.thumbnails?.[0]?.url,
+              platform: "youtube",
+              creator: details.author?.name,
+              duration: parseInt(details.lengthSeconds || "0", 10),
+              description: details.description || undefined,
+              isPublic: true,
+              watermarkNote: "Direct audio & video streams available.",
+            },
+            formats,
+          };
+        }
       }
     } catch (err) {
-      console.warn("[youtubeAdapter] ytdl.getInfo failed, attempting fallback extractor...", err);
-    }
-
-    // Fallback extraction
-    const fallback = await tryFallbackAnalysis(url, "youtube");
-    if (fallback && fallback.success && fallback.formats.length > 0) {
-      return fallback;
+      console.warn("[youtubeAdapter] ytdl.getInfo skipped or timed out:", err);
     }
 
     return {
