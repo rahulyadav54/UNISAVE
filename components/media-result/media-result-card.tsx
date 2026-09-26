@@ -219,7 +219,7 @@ export function MediaResultCard({
             </div>
           )}
 
-          {downloadStatus === "idle" && (
+          {(downloadStatus === "idle" || downloadStatus === "error") && (
             <Button
               type="button"
               size="lg"
