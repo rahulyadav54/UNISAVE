@@ -226,6 +226,37 @@ async function runYtDlp(args: string[], timeoutMs = DEFAULT_TIMEOUT_MS): Promise
 
 const USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
 
+export async function resolveCanonicalUrl(url: string): Promise<string> {
+  const lower = url.toLowerCase();
+  if (
+    lower.includes("facebook.com/share") ||
+    lower.includes("fb.watch") ||
+    lower.includes("fb.me") ||
+    lower.includes("fb.com") ||
+    lower.includes("vm.tiktok.com") ||
+    lower.includes("vt.tiktok.com") ||
+    lower.includes("pin.it") ||
+    lower.includes("youtu.be")
+  ) {
+    try {
+      const res = await fetch(url, {
+        method: "HEAD",
+        headers: {
+          "User-Agent": USER_AGENT,
+          "Accept-Language": "en-US,en;q=0.9",
+        },
+        redirect: "follow",
+      });
+      if (res.url && res.url !== url) {
+        return res.url;
+      }
+    } catch {
+      // ignore and use original url
+    }
+  }
+  return url;
+}
+
 function getExtractorArgs(url: string): string[] {
   const lowerUrl = url.toLowerCase();
   const args: string[] = [];
@@ -240,6 +271,8 @@ function getExtractorArgs(url: string): string[] {
 }
 
 export async function fetchMediaInfo(url: string): Promise<YtDlpInfo> {
+  const resolvedUrl = await resolveCanonicalUrl(url);
+
   const args: string[] = [
     ...ytDlpGlobalArgs(),
     "--dump-single-json",
@@ -247,14 +280,16 @@ export async function fetchMediaInfo(url: string): Promise<YtDlpInfo> {
     "--no-warnings",
     "--add-header",
     `User-Agent:${USER_AGENT}`,
+    "--add-header",
+    "Accept-Language:en-US,en;q=0.9",
   ];
 
-  const extractorArgs = getExtractorArgs(url);
+  const extractorArgs = getExtractorArgs(resolvedUrl);
   if (extractorArgs.length > 0) {
     args.push("--extractor-args", extractorArgs.join(";"));
   }
 
-  args.push(url);
+  args.push(resolvedUrl);
 
   let output: string;
   try {
@@ -267,7 +302,9 @@ export async function fetchMediaInfo(url: string): Promise<YtDlpInfo> {
       "--no-warnings",
       "--add-header",
       `User-Agent:${USER_AGENT}`,
-      url,
+      "--add-header",
+      "Accept-Language:en-US,en;q=0.9",
+      resolvedUrl,
     ];
     try {
       output = await runYtDlp(fallbackArgs);
@@ -286,6 +323,7 @@ export async function downloadWithYtDlp(
   outputPath: string,
   options?: { audioOnly?: boolean },
 ): Promise<void> {
+  const resolvedUrl = await resolveCanonicalUrl(url);
   const isAudio = Boolean(options?.audioOnly);
 
   const baseArgs = [
@@ -295,9 +333,11 @@ export async function downloadWithYtDlp(
     "--no-part",
     "--add-header",
     `User-Agent:${USER_AGENT}`,
+    "--add-header",
+    "Accept-Language:en-US,en;q=0.9",
   ];
 
-  const extractorArgs = getExtractorArgs(url);
+  const extractorArgs = getExtractorArgs(resolvedUrl);
   if (extractorArgs.length > 0) {
     baseArgs.push("--extractor-args", extractorArgs.join(";"));
   }
@@ -316,7 +356,7 @@ export async function downloadWithYtDlp(
     primaryArgs.push("--merge-output-format", "mp4", "--remux-video", "mp4");
   }
 
-  primaryArgs.push(url);
+  primaryArgs.push(resolvedUrl);
 
   try {
     await runYtDlp(primaryArgs, DOWNLOAD_TIMEOUT_MS);
@@ -326,7 +366,7 @@ export async function downloadWithYtDlp(
     // Fallback attempt: use standard progressive mp4 stream or best
     const fallbackSelector = isAudio
       ? "bestaudio/best"
-      : "best[vcodec!=none][acodec!=none]/best[ext=mp4]/hd/sd/bestvideo+bestaudio/best";
+      : "bestvideo+bestaudio/best[vcodec!=none][acodec!=none]/hd/sd/best[ext=mp4]/best";
     const fallbackArgs = [
       ...baseArgs,
       "-f",
@@ -341,7 +381,7 @@ export async function downloadWithYtDlp(
       fallbackArgs.push("--merge-output-format", "mp4");
     }
 
-    fallbackArgs.push(url);
+    fallbackArgs.push(resolvedUrl);
     await runYtDlp(fallbackArgs, DOWNLOAD_TIMEOUT_MS);
   }
 }

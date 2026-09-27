@@ -7,8 +7,8 @@ export const PLATFORMS: PlatformMeta[] = [
     slug: "youtube",
     color: "#FF0000",
     patterns: [
-      "(?:https?://)?(?:www\\.)?(?:youtube\\.com|youtu\\.be)/",
-      "(?:https?://)?(?:www\\.)?youtube\\.com/shorts/",
+      "(?:https?://)?(?:[a-zA-Z0-9_-]+\\.)?(?:youtube\\.com|youtu\\.be)/",
+      "(?:https?://)?(?:[a-zA-Z0-9_-]+\\.)?youtube\\.com/shorts/",
     ],
   },
   {
@@ -17,7 +17,8 @@ export const PLATFORMS: PlatformMeta[] = [
     slug: "instagram",
     color: "#E4405F",
     patterns: [
-      "(?:https?://)?(?:www\\.)?instagram\\.com/",
+      "(?:https?://)?(?:[a-zA-Z0-9_-]+\\.)?instagram\\.com/",
+      "(?:https?://)?(?:[a-zA-Z0-9_-]+\\.)?instagr\\.am/",
     ],
   },
   {
@@ -26,8 +27,9 @@ export const PLATFORMS: PlatformMeta[] = [
     slug: "tiktok",
     color: "#00F2EA",
     patterns: [
-      "(?:https?://)?(?:www\\.)?tiktok\\.com/",
-      "(?:https?://)?vm\\.tiktok\\.com/",
+      "(?:https?://)?(?:[a-zA-Z0-9_-]+\\.)?tiktok\\.com/",
+      "(?:https?://)?(?:[a-zA-Z0-9_-]+\\.)?vm\\.tiktok\\.com/",
+      "(?:https?://)?(?:[a-zA-Z0-9_-]+\\.)?vt\\.tiktok\\.com/",
     ],
   },
   {
@@ -36,8 +38,10 @@ export const PLATFORMS: PlatformMeta[] = [
     slug: "facebook",
     color: "#1877F2",
     patterns: [
-      "(?:https?://)?(?:www\\.)?facebook\\.com/",
-      "(?:https?://)?(?:www\\.)?fb\\.watch/",
+      "(?:https?://)?(?:[a-zA-Z0-9_-]+\\.)?facebook\\.com/",
+      "(?:https?://)?(?:[a-zA-Z0-9_-]+\\.)?fb\\.watch/",
+      "(?:https?://)?(?:[a-zA-Z0-9_-]+\\.)?fb\\.com/",
+      "(?:https?://)?(?:[a-zA-Z0-9_-]+\\.)?fb\\.me/",
     ],
   },
   {
@@ -46,7 +50,7 @@ export const PLATFORMS: PlatformMeta[] = [
     slug: "twitter",
     color: "#1DA1F2",
     patterns: [
-      "(?:https?://)?(?:www\\.)?(?:twitter\\.com|x\\.com)/",
+      "(?:https?://)?(?:[a-zA-Z0-9_-]+\\.)?(?:twitter\\.com|x\\.com)/",
     ],
   },
   {
@@ -55,8 +59,8 @@ export const PLATFORMS: PlatformMeta[] = [
     slug: "reddit",
     color: "#FF4500",
     patterns: [
-      "(?:https?://)?(?:www\\.)?reddit\\.com/",
-      "(?:https?://)?(?:www\\.)?redd\\.it/",
+      "(?:https?://)?(?:[a-zA-Z0-9_-]+\\.)?reddit\\.com/",
+      "(?:https?://)?(?:[a-zA-Z0-9_-]+\\.)?redd\\.it/",
     ],
   },
   {
@@ -65,8 +69,8 @@ export const PLATFORMS: PlatformMeta[] = [
     slug: "pinterest",
     color: "#E60023",
     patterns: [
-      "(?:https?://)?(?:www\\.)?pinterest\\.com/",
-      "(?:https?://)?pin\\.it/",
+      "(?:https?://)?(?:[a-zA-Z0-9_-]+\\.)?pinterest\\.com/",
+      "(?:https?://)?(?:[a-zA-Z0-9_-]+\\.)?pin\\.it/",
     ],
   },
   {
@@ -75,7 +79,7 @@ export const PLATFORMS: PlatformMeta[] = [
     slug: "vimeo",
     color: "#1AB7EA",
     patterns: [
-      "(?:https?://)?(?:www\\.)?vimeo\\.com/",
+      "(?:https?://)?(?:[a-zA-Z0-9_-]+\\.)?vimeo\\.com/",
     ],
   },
   {
@@ -84,7 +88,7 @@ export const PLATFORMS: PlatformMeta[] = [
     slug: "threads",
     color: "#FFFFFF",
     patterns: [
-      "(?:https?://)?(?:www\\.)?threads\\.net/",
+      "(?:https?://)?(?:[a-zA-Z0-9_-]+\\.)?threads\\.net/",
     ],
   },
 ];

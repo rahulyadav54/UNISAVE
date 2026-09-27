@@ -22,6 +22,8 @@ export async function tryFallbackAnalysis(
         return await extractVimeo(url);
       case "tiktok":
         return await extractTikTok(url);
+      case "facebook":
+        return await extractFacebook(url);
       case "reddit":
         return await extractReddit(url);
       case "twitter":
@@ -33,6 +35,182 @@ export async function tryFallbackAnalysis(
     }
   } catch (err) {
     console.error(`[FallbackExtractor] Error extracting ${platform} (${url}):`, err);
+    return null;
+  }
+}
+
+async function extractFacebook(url: string): Promise<AnalyzeResult | null> {
+  try {
+    const headers = {
+      "User-Agent":
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+      Accept:
+        "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+      "Accept-Language": "en-US,en;q=0.9",
+      "Sec-Fetch-Mode": "navigate",
+    };
+
+    let targetUrl = url;
+    // Resolve redirects for share/short links
+    try {
+      const headRes = await fetch(url, {
+        method: "GET",
+        headers,
+        redirect: "follow",
+      });
+      if (headRes.url && headRes.url !== url) {
+        targetUrl = headRes.url;
+      }
+      const html = await headRes.text();
+
+      // Extract title
+      const titleMatch =
+        html.match(/<meta\s+property="og:title"\s+content="([^"]*)"/i) ||
+        html.match(/<title>([^<]*)<\/title>/i);
+      const title = titleMatch ? titleMatch[1].replace(/ \| Facebook$/i, "").trim() : "Facebook Video";
+
+      // Extract thumbnail
+      const thumbMatch =
+        html.match(/<meta\s+property="og:image"\s+content="([^"]*)"/i) ||
+        html.match(/"preferred_thumbnail":{"image":{"uri":"([^"]+)"/i);
+      const rawThumb = thumbMatch ? thumbMatch[1] : undefined;
+      const thumbnail = rawThumb
+        ? decodeURIComponent(rawThumb.replace(/\\u0025/g, "%").replace(/\\\//g, "/").replace(/&amp;/g, "&"))
+        : undefined;
+
+      // Extract HD/SD video links if embedded
+      const hdMatch =
+        html.match(/"browser_native_hd_url":"([^"]+)"/) ||
+        html.match(/"playable_url_quality_hd":"([^"]+)"/) ||
+        html.match(/"hd_src":"([^"]+)"/) ||
+        html.match(/"hd_src_no_ratelimit":"([^"]+)"/);
+
+      const sdMatch =
+        html.match(/"browser_native_sd_url":"([^"]+)"/) ||
+        html.match(/"playable_url":"([^"]+)"/) ||
+        html.match(/"sd_src":"([^"]+)"/) ||
+        html.match(/"sd_src_no_ratelimit":"([^"]+)"/) ||
+        html.match(/<meta\s+property="og:video"\s+content="([^"]*)"/i) ||
+        html.match(/<meta\s+property="og:video:url"\s+content="([^"]*)"/i);
+
+      const cleanUrl = (str?: string) =>
+        str
+          ? str.replace(/\\u0026/g, "&").replace(/\\\//g, "/").replace(/&amp;/g, "&")
+          : undefined;
+
+      const hdDirect = cleanUrl(hdMatch?.[1]);
+      const sdDirect = cleanUrl(sdMatch?.[1]);
+
+      const formats: MediaFormat[] = [];
+
+      if (hdDirect) {
+        formats.push({
+          id: stableFormatIdFromKey(`fb-hd-${targetUrl}`),
+          type: "video",
+          format: "mp4",
+          quality: "HD 1080p / 720p",
+          resolution: "HD",
+          label: "HD High Definition",
+          available: true,
+          ytdlpFormatId: hdDirect.startsWith("http") ? hdDirect : "bestvideo+bestaudio/best",
+        });
+      }
+
+      if (sdDirect) {
+        formats.push({
+          id: stableFormatIdFromKey(`fb-sd-${targetUrl}`),
+          type: "video",
+          format: "mp4",
+          quality: "SD",
+          resolution: "SD",
+          label: "SD Standard Definition",
+          available: true,
+          ytdlpFormatId: sdDirect.startsWith("http") ? sdDirect : "best[ext=mp4]/best",
+        });
+      }
+
+      // Default high quality formats with yt-dlp format selectors
+      if (formats.length === 0) {
+        formats.push(
+          {
+            id: stableFormatIdFromKey(`fb-best-${targetUrl}`),
+            type: "video",
+            format: "mp4",
+            quality: "Best",
+            resolution: "HD",
+            label: "HD Video (Video + Audio)",
+            available: true,
+            ytdlpFormatId: "bestvideo+bestaudio/best[ext=mp4]/hd/sd/best",
+          },
+          {
+            id: stableFormatIdFromKey(`fb-sd-gen-${targetUrl}`),
+            type: "video",
+            format: "mp4",
+            quality: "SD",
+            resolution: "SD",
+            label: "SD Standard Quality",
+            available: true,
+            ytdlpFormatId: "sd/best[height<=480]/best",
+          },
+        );
+      }
+
+      formats.push({
+        id: stableFormatIdFromKey(`fb-audio-${targetUrl}`),
+        type: "audio",
+        format: "m4a",
+        quality: "Audio",
+        label: "Audio Sound Track",
+        available: true,
+        ytdlpFormatId: "bestaudio/best",
+      });
+
+      return {
+        success: true,
+        platform: "facebook",
+        media: {
+          title,
+          creator: "Facebook Creator",
+          thumbnail,
+          platform: "facebook",
+          isPublic: true,
+        },
+        formats,
+      };
+    } catch {
+      // Return structured fallback
+      return {
+        success: true,
+        platform: "facebook",
+        media: {
+          title: "Facebook Video",
+          creator: "Facebook",
+          platform: "facebook",
+          isPublic: true,
+        },
+        formats: [
+          {
+            id: stableFormatIdFromKey(`fb-best-${url}`),
+            type: "video",
+            format: "mp4",
+            quality: "HD",
+            label: "HD Video with Sound",
+            available: true,
+            ytdlpFormatId: "bestvideo+bestaudio/best[ext=mp4]/hd/sd/best",
+          },
+          {
+            id: stableFormatIdFromKey(`fb-audio-${url}`),
+            type: "audio",
+            format: "m4a",
+            quality: "Audio",
+            label: "Audio Track",
+            available: true,
+            ytdlpFormatId: "bestaudio/best",
+          },
+        ],
+      };
+    }
+  } catch {
     return null;
   }
 }

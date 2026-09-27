@@ -51,18 +51,26 @@ export async function processDownloadJob(jobId: string): Promise<void> {
     );
     const audioOnly = selected?.type === "audio";
 
-    // For video downloads on platforms like Facebook/Instagram, enforce progressive audio+video
-    if (!audioOnly && (formatSelector === "best" || formatSelector.includes("bestvideo+bestaudio") || formatSelector.includes("merged"))) {
-      formatSelector = "best[vcodec!=none][acodec!=none]/best[ext=mp4]/hd/sd/best/worst";
-    }
-
     await updateJob(jobId, { progress: 35 });
 
     const root = await ensureStorageDir();
     const tempName = `${jobId}.%(ext)s`;
     const outputTemplate = path.join(root, tempName);
 
-    if (pending.platform === "youtube") {
+    if (formatSelector.startsWith("http://") || formatSelector.startsWith("https://")) {
+      // Direct stream URL
+      const { writeFile } = await import("node:fs/promises");
+      const targetExtension = audioOnly ? "m4a" : "mp4";
+      const targetFilePath = path.join(root, `${jobId}.${targetExtension}`);
+      const directRes = await fetch(formatSelector, {
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        },
+      });
+      if (!directRes.ok) throw new Error(`Failed to fetch media stream (${directRes.status})`);
+      const arrayBuffer = await directRes.arrayBuffer();
+      await writeFile(targetFilePath, Buffer.from(arrayBuffer));
+    } else if (pending.platform === "youtube") {
       const { downloadYouTubeStream } = await import("@/server/platforms/youtube-adapter");
       const targetExtension = audioOnly ? "m4a" : "mp4";
       const targetFilePath = path.join(root, `${jobId}.${targetExtension}`);
@@ -76,7 +84,7 @@ export async function processDownloadJob(jobId: string): Promise<void> {
         console.warn("[processDownloadJob] Primary selector failed, trying progressive stream...", downloadErr);
         const progressiveSelector = audioOnly
           ? "bestaudio/best"
-          : "best[vcodec!=none][acodec!=none]/best[ext=mp4]/hd/sd/best/worst";
+          : "bestvideo+bestaudio/best[vcodec!=none][acodec!=none]/hd/sd/best[ext=mp4]/best";
         await downloadWithYtDlp(pending.url, progressiveSelector, outputTemplate, {
           audioOnly,
         });
