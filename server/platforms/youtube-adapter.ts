@@ -1,9 +1,11 @@
+import { createWriteStream } from "node:fs";
+import { pipeline } from "node:stream/promises";
+import { stat } from "node:fs/promises";
 import ytdl from "@distube/ytdl-core";
 import type { PlatformAdapter } from "./types";
 import type { AnalyzeResult, MediaFormat } from "@/types/media";
 import { stableFormatIdFromKey } from "@/server/services/format-mapper";
 import { tryFallbackAnalysis } from "@/server/services/fallback-extractor";
-import { downloadWithYtDlp } from "@/server/services/ytdlp";
 
 export const youtubeAdapter: PlatformAdapter = {
   id: "youtube",
@@ -114,21 +116,135 @@ export const youtubeAdapter: PlatformAdapter = {
   },
 };
 
+/**
+ * Download a YouTube video/audio using pure Node.js (ytdl-core).
+ * This avoids yt-dlp binary entirely — critical for Vercel where
+ * yt-dlp gets bot-checked by YouTube on datacenter IPs.
+ */
 export async function downloadYouTubeStream(
   url: string,
-  itagOrSelector: string,
+  _itagOrSelector: string,
   outputPath: string,
   options?: { audioOnly?: boolean },
 ): Promise<void> {
   const isAudio = options?.audioOnly;
-  
-  // ytdl-core is currently hanging on Vercel due to YouTube changes.
-  // We rely entirely on yt-dlp which now uses the tv client to bypass bot checks.
-  let format = itagOrSelector;
-  
-  if (!Number.isNaN(parseInt(format, 10))) {
-    format = isAudio ? "140/bestaudio/best" : "22/18/best[ext=mp4]/best";
+  const STREAM_TIMEOUT_MS = 120_000; // 2 minutes max
+
+  // Determine the best quality option for ytdl-core
+  const itagNum = parseInt(_itagOrSelector, 10);
+  const qualityOpts: ytdl.downloadOptions = {
+    highWaterMark: 1 << 25, // 32 MB buffer for fast streaming
+  };
+
+  if (!Number.isNaN(itagNum)) {
+    // We have a specific itag from ytdl analysis
+    qualityOpts.quality = itagNum;
+  } else if (isAudio) {
+    qualityOpts.quality = "highestaudio";
+    qualityOpts.filter = "audioonly";
+  } else {
+    // For video, prefer progressive streams (has both audio+video)
+    qualityOpts.quality = "highest";
+    qualityOpts.filter = "audioandvideo";
   }
 
-  await downloadWithYtDlp(url, format, outputPath, options);
+  console.log(`[downloadYouTubeStream] Starting ytdl-core download: ${url} -> ${outputPath}`);
+  console.log(`[downloadYouTubeStream] Options:`, JSON.stringify(qualityOpts));
+
+  // Attempt 1: Try with specific quality
+  try {
+    await streamWithTimeout(url, outputPath, qualityOpts, STREAM_TIMEOUT_MS);
+    return;
+  } catch (err1) {
+    console.warn("[downloadYouTubeStream] Attempt 1 failed:", err1 instanceof Error ? err1.message : err1);
+  }
+
+  // Attempt 2: Try with relaxed quality (any progressive for video, any audio)
+  const fallbackOpts: ytdl.downloadOptions = {
+    highWaterMark: 1 << 25,
+  };
+  if (isAudio) {
+    fallbackOpts.filter = "audioonly";
+  } else {
+    fallbackOpts.filter = "audioandvideo";
+  }
+  console.log(`[downloadYouTubeStream] Retrying with fallback options...`);
+
+  try {
+    await streamWithTimeout(url, outputPath, fallbackOpts, STREAM_TIMEOUT_MS);
+    return;
+  } catch (err2) {
+    console.warn("[downloadYouTubeStream] Attempt 2 failed:", err2 instanceof Error ? err2.message : err2);
+  }
+
+  // Attempt 3: Absolute last resort - any format
+  console.log(`[downloadYouTubeStream] Last resort: downloading any available format...`);
+  await streamWithTimeout(url, outputPath, { highWaterMark: 1 << 25 }, STREAM_TIMEOUT_MS);
+}
+
+/**
+ * Stream a YouTube video to a file with an absolute timeout.
+ * Cleans up properly on failure.
+ */
+async function streamWithTimeout(
+  url: string,
+  outputPath: string,
+  opts: ytdl.downloadOptions,
+  timeoutMs: number,
+): Promise<void> {
+  return new Promise<void>((resolve, reject) => {
+    let settled = false;
+    let bytesReceived = 0;
+
+    const timer = setTimeout(() => {
+      if (!settled) {
+        settled = true;
+        try { stream.destroy(); } catch { /* ignore */ }
+        try { ws.destroy(); } catch { /* ignore */ }
+        reject(new Error(`YouTube stream timed out after ${timeoutMs / 1000}s (received ${bytesReceived} bytes)`));
+      }
+    }, timeoutMs);
+
+    const stream = ytdl(url, opts);
+    const ws = createWriteStream(outputPath);
+
+    stream.on("data", (chunk: Buffer) => {
+      bytesReceived += chunk.length;
+    });
+
+    stream.on("error", (err) => {
+      if (!settled) {
+        settled = true;
+        clearTimeout(timer);
+        try { ws.destroy(); } catch { /* ignore */ }
+        reject(err);
+      }
+    });
+
+    ws.on("error", (err) => {
+      if (!settled) {
+        settled = true;
+        clearTimeout(timer);
+        try { stream.destroy(); } catch { /* ignore */ }
+        reject(err);
+      }
+    });
+
+    pipeline(stream, ws)
+      .then(() => {
+        if (!settled) {
+          settled = true;
+          clearTimeout(timer);
+          console.log(`[downloadYouTubeStream] Completed: ${bytesReceived} bytes written to ${outputPath}`);
+          resolve();
+        }
+      })
+      .catch((err) => {
+        if (!settled) {
+          settled = true;
+          clearTimeout(timer);
+          reject(err);
+        }
+      });
+  });
 }

@@ -95,6 +95,7 @@ export async function processDownloadJob(jobId: string): Promise<void> {
 
     await completeJob(jobId, stored.token, stored.fileName);
   } catch (err) {
+    console.error("[processDownloadJob] Fatal error:", err);
     const message =
       err instanceof Error
         ? err.message

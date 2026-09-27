@@ -118,7 +118,7 @@ export function getYtDlpBinary(): string {
 }
 
 function ytDlpGlobalArgs(): string[] {
-  const args: string[] = ["--js-runtimes", `node:"${process.execPath}"`];
+  const args: string[] = [];
   const ffmpeg = process.env.FFMPEG_PATH?.trim();
   if (ffmpeg) {
     args.push("--ffmpeg-location", ffmpeg);
@@ -220,24 +220,12 @@ function getExtractorArgs(url: string): string[] {
   const lowerUrl = url.toLowerCase();
   const args: string[] = [];
 
-  if (lowerUrl.includes("youtube.com") || lowerUrl.includes("youtu.be")) {
-    args.push("youtube:player_client=ios,android");
-  } else if (lowerUrl.includes("instagram.com")) {
-    args.push("instagram:player_client=web");
+  // YouTube downloads are handled by ytdl-core (not yt-dlp), so no args needed here.
+  // Only add extractor args for platforms that actually support them.
+  if (lowerUrl.includes("instagram.com")) {
+    // Instagram doesn't use player_client but benefits from no warnings
   } else if (lowerUrl.includes("tiktok.com")) {
-    args.push("tiktok:player_client=web");
-  } else if (lowerUrl.includes("twitter.com") || lowerUrl.includes("x.com")) {
-    args.push("twitter:player_client=web");
-  } else if (lowerUrl.includes("facebook.com")) {
-    args.push("facebook:player_client=web");
-  } else if (lowerUrl.includes("reddit.com")) {
-    args.push("reddit:player_client=web");
-  } else if (lowerUrl.includes("pinterest.com")) {
-    args.push("pinterest:player_client=web");
-  } else if (lowerUrl.includes("vimeo.com")) {
-    args.push("vimeo:player_client=web");
-  } else if (lowerUrl.includes("threads.com")) {
-    args.push("threads:player_client=web");
+    // TikTok works best with defaults
   }
 
   return args;
