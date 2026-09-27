@@ -4,6 +4,7 @@ import { existsSync, chmodSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import os from "node:os";
+import ffmpegPath from "ffmpeg-static";
 
 export interface YtDlpFormat {
   format_id: string;
@@ -117,9 +118,19 @@ export function getYtDlpBinary(): string {
   return process.env.YT_DLP_PATH || cachedBinaryPath || "yt-dlp";
 }
 
+export function getFfmpegPath(): string | null {
+  if (process.env.FFMPEG_PATH?.trim()) {
+    return process.env.FFMPEG_PATH.trim();
+  }
+  if (ffmpegPath && existsSync(ffmpegPath)) {
+    return ffmpegPath;
+  }
+  return null;
+}
+
 function ytDlpGlobalArgs(): string[] {
   const args: string[] = [];
-  const ffmpeg = process.env.FFMPEG_PATH?.trim();
+  const ffmpeg = getFfmpegPath();
   if (ffmpeg) {
     args.push("--ffmpeg-location", ffmpeg);
   }
@@ -213,15 +224,12 @@ async function runYtDlp(args: string[], timeoutMs = DEFAULT_TIMEOUT_MS): Promise
   });
 }
 
-
 const USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
 
 function getExtractorArgs(url: string): string[] {
   const lowerUrl = url.toLowerCase();
   const args: string[] = [];
 
-  // YouTube downloads are handled by ytdl-core (not yt-dlp), so no args needed here.
-  // Only add extractor args for platforms that actually support them.
   if (lowerUrl.includes("instagram.com")) {
     // Instagram doesn't use player_client but benefits from no warnings
   } else if (lowerUrl.includes("tiktok.com")) {
@@ -305,10 +313,7 @@ export async function downloadWithYtDlp(
   if (isAudio) {
     primaryArgs.push("--extract-audio", "--audio-format", "m4a");
   } else {
-    const ffmpeg = process.env.FFMPEG_PATH?.trim();
-    if (ffmpeg) {
-      primaryArgs.push("--merge-output-format", "mp4", "--remux-video", "mp4");
-    }
+    primaryArgs.push("--merge-output-format", "mp4", "--remux-video", "mp4");
   }
 
   primaryArgs.push(url);
@@ -318,10 +323,10 @@ export async function downloadWithYtDlp(
   } catch (err) {
     console.warn("[downloadWithYtDlp] Primary selector failed, trying fallback format...", err);
 
-    // Fallback attempt: use standard progressive mp4 stream (hd/sd/best)
+    // Fallback attempt: use standard progressive mp4 stream or best
     const fallbackSelector = isAudio
       ? "bestaudio/best"
-      : "hd/sd/best[ext=mp4]/best/worst";
+      : "best[vcodec!=none][acodec!=none]/best[ext=mp4]/hd/sd/bestvideo+bestaudio/best";
     const fallbackArgs = [
       ...baseArgs,
       "-f",
@@ -332,6 +337,8 @@ export async function downloadWithYtDlp(
 
     if (isAudio) {
       fallbackArgs.push("--extract-audio", "--audio-format", "m4a");
+    } else {
+      fallbackArgs.push("--merge-output-format", "mp4");
     }
 
     fallbackArgs.push(url);
