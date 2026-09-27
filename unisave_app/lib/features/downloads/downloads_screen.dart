@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -424,87 +425,93 @@ class _CompletedDownloadCard extends ConsumerWidget {
         borderRadius: BorderRadius.circular(16),
         side: BorderSide(color: Colors.green.withOpacity(0.3)),
       ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            Row(
-              children: [
-                _Thumbnail(url: task.thumbnail),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        task.title,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                            fontWeight: FontWeight.bold, fontSize: 14),
-                      ),
-                      const SizedBox(height: 6),
-                      Row(
-                        children: [
-                          const Icon(Icons.check_circle_rounded,
-                              color: Colors.green, size: 14),
-                          const SizedBox(width: 4),
-                          Text(
-                            'Completed • $sizeText • ${task.quality}',
-                            style: const TextStyle(
-                                color: Colors.green,
-                                fontSize: 11,
-                                fontWeight: FontWeight.bold),
-                          ),
-                        ],
-                      ),
-                    ],
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: () {
+          if (task.filePath != null) {
+            context.push('/player', extra: {
+              'filePath': task.filePath,
+              'title': task.title,
+              'platform': task.platform,
+            });
+          }
+        },
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            children: [
+              Row(
+                children: [
+                  _Thumbnail(url: task.thumbnail),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          task.title,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                              fontWeight: FontWeight.bold, fontSize: 14),
+                        ),
+                        const SizedBox(height: 6),
+                        Row(
+                          children: [
+                            const Icon(Icons.check_circle_rounded,
+                                color: Colors.green, size: 14),
+                            const SizedBox(width: 4),
+                            Text(
+                              'Completed • $sizeText • ${task.quality}',
+                              style: const TextStyle(
+                                  color: Colors.green,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 14),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                _ActionButton(
-                  icon: Icons.play_arrow_rounded,
-                  label: 'Open / Play',
-                  onTap: () async {
-                    if (task.filePath != null) {
-                      try {
-                        const platform =
-                            MethodChannel('com.unisave.unisave_app/gallery');
-                        await platform.invokeMethod('openMediaFile', {
+                ],
+              ),
+              const SizedBox(height: 14),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  _ActionButton(
+                    icon: Icons.play_circle_fill_rounded,
+                    label: 'Play In-App',
+                    onTap: () {
+                      if (task.filePath != null) {
+                        context.push('/player', extra: {
                           'filePath': task.filePath,
+                          'title': task.title,
+                          'platform': task.platform,
                         });
-                      } catch (e) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('File at: ${task.filePath}')),
-                        );
                       }
-                    }
-                  },
-                ),
-                _ActionButton(
-                  icon: Icons.share_rounded,
-                  label: 'Share',
-                  onTap: () {
-                    if (task.filePath != null) {
-                      Share.shareXFiles([XFile(task.filePath!)],
-                          text: task.title);
-                    }
-                  },
-                ),
-                _ActionButton(
-                  icon: Icons.delete_outline_rounded,
-                  label: 'Delete',
-                  color: Colors.redAccent,
-                  onTap: () => _confirmDelete(context, ref),
-                ),
-              ],
-            ),
-          ],
+                    },
+                  ),
+                  _ActionButton(
+                    icon: Icons.share_rounded,
+                    label: 'Share',
+                    onTap: () {
+                      if (task.filePath != null) {
+                        Share.shareXFiles([XFile(task.filePath!)],
+                            text: task.title);
+                      }
+                    },
+                  ),
+                  _ActionButton(
+                    icon: Icons.delete_outline_rounded,
+                    label: 'Delete',
+                    color: Colors.redAccent,
+                    onTap: () => _confirmDelete(context, ref),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );

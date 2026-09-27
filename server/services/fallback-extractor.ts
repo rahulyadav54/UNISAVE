@@ -18,6 +18,8 @@ export async function tryFallbackAnalysis(
     switch (platform) {
       case "youtube":
         return await extractYouTube(url);
+      case "instagram":
+        return await extractInstagram(url);
       case "vimeo":
         return await extractVimeo(url);
       case "tiktok":
@@ -35,6 +37,65 @@ export async function tryFallbackAnalysis(
     }
   } catch (err) {
     console.error(`[FallbackExtractor] Error extracting ${platform} (${url}):`, err);
+    return null;
+  }
+}
+
+async function extractInstagram(url: string): Promise<AnalyzeResult | null> {
+  try {
+    const cleanUrl = url.split("?")[0].replace(/\/$/, "");
+    let oembedUrl = `https://www.instagram.com/oembed/?url=${encodeURIComponent(cleanUrl)}`;
+    
+    const res = await fetch(oembedUrl, {
+      headers: {
+        "User-Agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+      },
+    });
+
+    let title = "Instagram Reel / Post";
+    let creator = "Instagram Creator";
+    let thumbnail: string | undefined;
+
+    if (res.ok) {
+      const data = (await res.json()) as OEmbedResponse;
+      title = data.title || title;
+      creator = data.author_name || creator;
+      thumbnail = data.thumbnail_url;
+    }
+
+    return {
+      success: true,
+      platform: "instagram",
+      media: {
+        title,
+        creator,
+        thumbnail,
+        platform: "instagram",
+        isPublic: true,
+      },
+      formats: [
+        {
+          id: stableFormatIdFromKey(`ig-best-${url}`),
+          type: "video",
+          format: "mp4",
+          quality: "Best",
+          label: "HD Video (Video + Audio)",
+          available: true,
+          ytdlpFormatId: "bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/best[vcodec!=none][acodec!=none]/best[ext=mp4]/best",
+        },
+        {
+          id: stableFormatIdFromKey(`ig-audio-${url}`),
+          type: "audio",
+          format: "m4a",
+          quality: "Audio",
+          label: "Audio Sound Track",
+          available: true,
+          ytdlpFormatId: "bestaudio/best",
+        },
+      ],
+    };
+  } catch {
     return null;
   }
 }

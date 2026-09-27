@@ -10,6 +10,7 @@ function videoMergeSelector(height: number): string {
   return [
     `bestvideo[height=${height}][ext=mp4]+bestaudio[ext=m4a]`,
     `bestvideo[height<=${height}]+bestaudio`,
+    `best[height<=${height}][vcodec!=none][acodec!=none]`,
     `best[height<=${height}]`,
   ].join("/");
 }
@@ -24,7 +25,7 @@ function hasVideo(f: YtDlpFormat): boolean {
 function hasAudio(f: YtDlpFormat): boolean {
   if (f.acodec && f.acodec !== "none") return true;
   // Many pre-merged standard formats like sd/hd omit acodec in metadata
-  if (f.format_id && (f.format_id === "sd" || f.format_id === "hd" || f.format_note === "sd" || f.format_note === "hd")) return true;
+  if (f.format_id && (f.format_id === "sd" || f.format_id === "hd" || f.format_note === "sd" || f.format_note === "hd" || f.format_id === "0")) return true;
   return false;
 }
 
@@ -96,7 +97,7 @@ export function mapYtDlpFormatsToMediaFormats(
       quality: "Best",
       label: "Best available",
       available: true,
-      ytdlpFormatId: "bestvideo+bestaudio/best",
+      ytdlpFormatId: "bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/best[vcodec!=none][acodec!=none]/best[ext=mp4]/best",
     });
   }
 

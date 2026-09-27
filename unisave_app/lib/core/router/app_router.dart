@@ -8,6 +8,7 @@ import '../../features/history/history_screen.dart';
 import '../../features/settings/settings_screen.dart';
 import '../../features/analyzer/result_screen.dart';
 import '../../features/onboarding/onboarding_screen.dart';
+import '../../features/player/video_player_screen.dart';
 import '../../data/models/media_models.dart';
 import '../../features/history/history_provider.dart'; // we can access SharedPreferences via sharedPrefsProvider
 
@@ -56,6 +57,18 @@ final routerProvider = Provider<GoRouter>((ref) {
           return ResultScreen(
             result: args['result'] as AnalyzeResult,
             originalUrl: args['originalUrl'] as String,
+          );
+        },
+      ),
+      GoRoute(
+        path: '/player',
+        parentNavigatorKey: rootNavigatorKey,
+        builder: (context, state) {
+          final args = state.extra as Map<String, dynamic>;
+          return VideoPlayerScreen(
+            filePath: args['filePath'] as String,
+            title: args['title'] as String? ?? 'Media Player',
+            platform: args['platform'] as String?,
           );
         },
       ),

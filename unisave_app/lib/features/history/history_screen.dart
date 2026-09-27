@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import 'history_provider.dart';
@@ -59,17 +60,16 @@ class HistoryScreen extends ConsumerWidget {
                       '${item.platform.toUpperCase()} • ${DateFormat('MMM dd, yyyy').format(item.date)}',
                       style: const TextStyle(fontSize: 12),
                     ),
-                    trailing: IconButton(
-                      icon: const Icon(Icons.folder_open),
-                      onPressed: () {
-                        // TODO: Open local path
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text('File located at: ${item.localPath}'),
-                          ),
-                        );
-                      },
-                    ),
+                    trailing: const Icon(Icons.play_circle_fill_rounded, color: Colors.white70),
+                    onTap: () {
+                      if (item.localPath.isNotEmpty) {
+                        context.push('/player', extra: {
+                          'filePath': item.localPath,
+                          'title': item.title,
+                          'platform': item.platform,
+                        });
+                      }
+                    },
                   ),
                 );
               },

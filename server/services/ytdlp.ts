@@ -114,18 +114,64 @@ export async function ensureYtDlpBinary(): Promise<string> {
   return downloadPromise;
 }
 
+let cachedFfmpegPath: string | null = null;
+let ffmpegPromise: Promise<string | null> | null = null;
+
+export async function ensureFfmpegBinary(): Promise<string | null> {
+  if (process.env.FFMPEG_PATH?.trim()) {
+    return process.env.FFMPEG_PATH.trim();
+  }
+  if (cachedFfmpegPath && existsSync(cachedFfmpegPath)) {
+    return cachedFfmpegPath;
+  }
+  if (ffmpegPromise) {
+    return ffmpegPromise;
+  }
+
+  ffmpegPromise = (async () => {
+    const isWin = process.platform === "win32";
+    const binName = isWin ? "ffmpeg.exe" : "ffmpeg";
+    const binDir = path.join(os.tmpdir(), "unisave-bin");
+    const targetPath = path.join(binDir, binName);
+
+    if (existsSync(targetPath)) {
+      try {
+        if (!isWin) chmodSync(targetPath, 0o755);
+      } catch {
+        // ignore
+      }
+      cachedFfmpegPath = targetPath;
+      return targetPath;
+    }
+
+    if (ffmpegPath && existsSync(ffmpegPath)) {
+      try {
+        await mkdir(binDir, { recursive: true });
+        const { copyFile } = await import("node:fs/promises");
+        await copyFile(ffmpegPath, targetPath);
+        if (!isWin) chmodSync(targetPath, 0o755);
+        cachedFfmpegPath = targetPath;
+        console.log(`[UNISAVE] ffmpeg executable ready at ${targetPath}`);
+        return targetPath;
+      } catch (err) {
+        console.warn("[UNISAVE] Could not copy ffmpeg-static to tmpdir:", err);
+      }
+      cachedFfmpegPath = ffmpegPath;
+      return ffmpegPath;
+    }
+
+    return null;
+  })();
+
+  return ffmpegPromise;
+}
+
 export function getYtDlpBinary(): string {
   return process.env.YT_DLP_PATH || cachedBinaryPath || "yt-dlp";
 }
 
 export function getFfmpegPath(): string | null {
-  if (process.env.FFMPEG_PATH?.trim()) {
-    return process.env.FFMPEG_PATH.trim();
-  }
-  if (ffmpegPath && existsSync(ffmpegPath)) {
-    return ffmpegPath;
-  }
-  return null;
+  return process.env.FFMPEG_PATH || cachedFfmpegPath || (ffmpegPath && existsSync(ffmpegPath) ? ffmpegPath : null);
 }
 
 function ytDlpGlobalArgs(): string[] {
@@ -175,6 +221,7 @@ async function runYtDlp(args: string[], timeoutMs = DEFAULT_TIMEOUT_MS): Promise
   let bin = process.env.YT_DLP_PATH || "yt-dlp";
   try {
     bin = await ensureYtDlpBinary();
+    await ensureFfmpegBinary();
   } catch {
     // fallback
   }
