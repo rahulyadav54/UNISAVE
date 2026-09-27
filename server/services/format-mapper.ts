@@ -15,11 +15,17 @@ function videoMergeSelector(height: number): string {
 }
 
 function hasVideo(f: YtDlpFormat): boolean {
-  return Boolean(f.vcodec && f.vcodec !== "none");
+  if (f.vcodec && f.vcodec !== "none") return true;
+  if (f.width || f.height) return true;
+  if (f.format_id && (f.format_id === "sd" || f.format_id === "hd" || f.format_id.includes("video"))) return true;
+  return false;
 }
 
 function hasAudio(f: YtDlpFormat): boolean {
-  return Boolean(f.acodec && f.acodec !== "none");
+  if (f.acodec && f.acodec !== "none") return true;
+  // Many pre-merged standard formats like sd/hd omit acodec in metadata
+  if (f.format_id && (f.format_id === "sd" || f.format_id === "hd" || f.format_note === "sd" || f.format_note === "hd")) return true;
+  return false;
 }
 
 /**

@@ -1,4 +1,5 @@
 import path from "node:path";
+import { stat, readdir } from "node:fs/promises";
 import { getAdapterForUrl } from "@/server/platforms/registry";
 import { downloadWithYtDlp } from "@/server/services/ytdlp";
 import {
@@ -44,11 +45,16 @@ export async function processDownloadJob(jobId: string): Promise<void> {
 
   try {
     const selected = pending.formats.find((f) => f.id === pending.formatId);
-    const formatSelector = adapter.getFormatSelector(
+    let formatSelector = adapter.getFormatSelector(
       pending.formatId,
       pending.formats,
     );
     const audioOnly = selected?.type === "audio";
+
+    // For video downloads on platforms like Facebook/Instagram, enforce progressive audio+video
+    if (!audioOnly && (formatSelector === "best" || formatSelector.includes("bestvideo+bestaudio") || formatSelector.includes("merged"))) {
+      formatSelector = "best[vcodec!=none][acodec!=none]/best[ext=mp4]/hd/sd/best/worst";
+    }
 
     await updateJob(jobId, { progress: 35 });
 
@@ -67,8 +73,10 @@ export async function processDownloadJob(jobId: string): Promise<void> {
           audioOnly,
         });
       } catch (downloadErr) {
-        console.warn("[processDownloadJob] Primary download selector failed, trying progressive stream...", downloadErr);
-        const progressiveSelector = audioOnly ? "bestaudio/best" : "best[ext=mp4]/best/worst";
+        console.warn("[processDownloadJob] Primary selector failed, trying progressive stream...", downloadErr);
+        const progressiveSelector = audioOnly
+          ? "bestaudio/best"
+          : "best[vcodec!=none][acodec!=none]/best[ext=mp4]/hd/sd/best/worst";
         await downloadWithYtDlp(pending.url, progressiveSelector, outputTemplate, {
           audioOnly,
         });
@@ -77,15 +85,41 @@ export async function processDownloadJob(jobId: string): Promise<void> {
 
     await updateJob(jobId, { progress: 85 });
 
-    const { readdir } = await import("node:fs/promises");
     const files = await readdir(root);
-    const downloaded = files.find((f) => f.startsWith(jobId));
-    if (!downloaded) {
-      throw new Error("Download completed but file was not found.");
+    const matchingFiles = files.filter((f) => f.startsWith(jobId) && !f.endsWith(".part") && !f.endsWith(".ytdl"));
+
+    let downloadedFile: string | undefined;
+
+    if (audioOnly) {
+      downloadedFile = matchingFiles.find((f) => f.endsWith(".m4a") || f.endsWith(".mp3") || f.endsWith(".aac") || f.endsWith(".ogg")) || matchingFiles[0];
+    } else {
+      // For video, strictly find video files and choose the largest one
+      const videoFiles = matchingFiles.filter((f) =>
+        f.endsWith(".mp4") || f.endsWith(".webm") || f.endsWith(".mkv") || f.endsWith(".mov") || f.endsWith(".avi")
+      );
+
+      if (videoFiles.length > 0) {
+        // Sort by file size descending so we get the full video
+        const withSizes = await Promise.all(
+          videoFiles.map(async (f) => ({
+            name: f,
+            size: (await stat(path.join(root, f))).size,
+          }))
+        );
+        withSizes.sort((a, b) => b.size - a.size);
+        downloadedFile = withSizes[0].name;
+      }
     }
 
-    const fullPath = path.join(root, downloaded);
-    const ext = path.extname(downloaded).replace(".", "") || (audioOnly ? "m4a" : "mp4");
+    if (!downloadedFile) {
+      if (!audioOnly) {
+        throw new Error("Could not extract a valid video stream from this link. Please verify the link is public.");
+      }
+      throw new Error("Download completed but media file was not found.");
+    }
+
+    const fullPath = path.join(root, downloadedFile);
+    const ext = path.extname(downloadedFile).replace(".", "") || (audioOnly ? "m4a" : "mp4");
     const mime = mimeFromExtension(ext);
     const baseName = sanitizeFileName(
       `unisave-${pending.platform}-${audioOnly ? "audio" : "video"}.${ext}`,

@@ -305,7 +305,10 @@ export async function downloadWithYtDlp(
   if (isAudio) {
     primaryArgs.push("--extract-audio", "--audio-format", "m4a");
   } else {
-    primaryArgs.push("--merge-output-format", "mp4", "--remux-video", "mp4");
+    const ffmpeg = process.env.FFMPEG_PATH?.trim();
+    if (ffmpeg) {
+      primaryArgs.push("--merge-output-format", "mp4", "--remux-video", "mp4");
+    }
   }
 
   primaryArgs.push(url);
@@ -315,8 +318,10 @@ export async function downloadWithYtDlp(
   } catch (err) {
     console.warn("[downloadWithYtDlp] Primary selector failed, trying fallback format...", err);
 
-    // Fallback attempt: use standard best/m4a without complex format merging
-    const fallbackSelector = isAudio ? "bestaudio/best" : "best[ext=mp4]/bestvideo+bestaudio/best";
+    // Fallback attempt: use standard progressive mp4 stream (hd/sd/best)
+    const fallbackSelector = isAudio
+      ? "bestaudio/best"
+      : "hd/sd/best[ext=mp4]/best/worst";
     const fallbackArgs = [
       ...baseArgs,
       "-f",
